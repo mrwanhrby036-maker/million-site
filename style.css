@@ -963,6 +963,10 @@ img.is-broken {
 .roomnew{display:grid;gap:14px;justify-items:center;margin-top:18px}
 .roomjoin{display:flex;gap:10px;width:100%;max-width:440px}
 .roomjoin .inp{flex:1;text-align:center;letter-spacing:.16em;font-weight:900;text-transform:uppercase}
+.roominvite{display:grid;justify-items:center;gap:8px;margin:20px 0 12px;padding:20px;border-radius:18px;background:#ffffff08;border:1px solid #ffffff1f;text-align:center}
+.roominvite__label{font-size:14px;font-weight:900;color:var(--muted,#9aa0b4)}
+.roominvite .hint{margin:0}
+.roominvite .roomcode{user-select:all}
 .roomcode{display:inline-block;margin:6px auto 4px;padding:12px 22px;border-radius:16px;font-size:clamp(26px,7vw,44px);
   font-weight:900;letter-spacing:.22em;color:var(--cyan,#22d3ee);background:#ffffff0d;border:1px dashed #ffffff2b;text-align:center}
 .roomsetup{display:grid;gap:14px;margin:18px 0;padding:16px;border-radius:18px;background:#ffffff08;border:1px solid #ffffff14}
