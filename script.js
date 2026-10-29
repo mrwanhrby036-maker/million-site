@@ -12233,7 +12233,7 @@
   const STATE = { play: { cat: 'all', q: null, recent: [] }, game: { running: false, left: 0, score: 0, t: null, deck: [], i: 0 } };
 
   function adSlot() {
-    return '<div class="ad"><span class="ad__tag">إعلان</span><script>(function(s){s.dataset.zone=\'12149469\',s.src=\'https://n6wxm.com/vignette.min.js\'})((document.querySelector(\'.ad\') || [document.documentElement, document.body].filter(Boolean).pop()).appendChild(document.createElement(\'script\')))</script></div>';
+    return '<div class="ad"><span class="ad__tag">إعلان</span><div class="ad__ph">مساحة إعلان محجوزة</div></div>';
   }
 
   function catChip(catId) {
