@@ -12355,7 +12355,7 @@
           '<div class="stat"><b>' + num(MZ_TOTAL) + '</b><span>مستوى للجائزة</span></div>' +
           '<div class="stat"><b>' + num(myStats().wins) + '</b><span>مرات فوزك</span></div>' +
         '</div>' +
-        '<div class="mzhero__art"><img src="million-light.png" alt="لاعب على مسرح المسابقة وشيك مليون جنيه" width="1279" height="709" loading="eager"></div>' +
+        '<div class="mzhero__art"><img src="https://i.ibb.co/Fb4HLGSN/million-light.png" alt="لاعب على مسرح المسابقة وشيك مليون جنيه" width="1279" height="709" loading="eager" fetchpriority="high"></div>' +
       '</section>' +
       '<div class="wrap">' + adSlot() + '</div>' +
       '<section class="wrap">' +
@@ -12375,13 +12375,13 @@
       '<section class="wrap">' +
         '<div class="sec-head"><div><span class="eyebrow">على الجانب</span><h2>أقسام تانية</h2></div><p>زي الألعاب بالظبط</p></div>' +
         '<div class="promos">' +
-          '<a class="promo" href="#/play"><img src="talk-light.png" alt="اتنين من الشلة بيتكلموا" class="promo__img">' +
+          '<a class="promo" href="#/play"><img src="https://i.ibb.co/MkB4pQ2k/talk-light.png" alt="اتنين من الشلة بيتكلموا" class="promo__img">' +
             '<b>ماذا لو خيّروك؟</b><span>أسئلة جدلية للشلة والرحلات — مفيش إجابة صح، فيه جو حلو بس.</span>' +
             '<span class="promo__go">' + ICON('dice') + ' العب</span></a>' +
-          '<a class="promo" href="#/party"><img src="trip-light.png" alt="الشلة في رحلة" class="promo__img">' +
+          '<a class="promo" href="#/party"><img src="https://i.ibb.co/RGGyqxsP/trip-light.png" alt="الشلة في رحلة" class="promo__img">' +
             '<b>تحدي الشلة</b><span>غرف تحدي بأسئلة المليون — ١ ضد ١ لحد ٤ ضد ٤، والفريق الأعلى مكسب يكسب.</span>' +
             '<span class="promo__go">' + ICON('users') + ' ابدأ</span></a>' +
-          '<a class="promo" href="#/games"><img src="whatif-light.png" alt="طفل ماسك علامة استفهام" class="promo__img promo__img--tall">' +
+          '<a class="promo" href="#/games"><img src="https://i.ibb.co/nMk1KM0k/whatif-light.png" alt="طفل ماسك علامة استفهام" class="promo__img promo__img--tall">' +
             '<b>الألعاب</b><span>«مين يبدأ؟» وتحدي ٢٠ ثانية — ألعاب سريعة للشلة.</span>' +
             '<span class="promo__go">' + ICON('gamepad') + ' العب</span></a>' +
         '</div>' +
@@ -13151,26 +13151,26 @@
   /* ---------- الصور والرسومات ---------- */
   function viewArt() {
     const items = [
-      { f: 'million', t: 'مسرح المسابقة وشيك المليون', d: '1279×709', cdn: 'million.png', cdnL: 'million-light.png' },
-      { f: 'talk', t: 'اتنين من الشلة بيتكلموا', d: '900×490', cdn: 'talk.png', cdnL: 'talk-light.png' },
-      { f: 'trip', t: 'الشلة في رحلة', d: '900×490', cdn: 'trip.png', cdnL: 'trip-light.png' },
-      { f: 'whatif', t: 'طفل ماسك علامة استفهام', d: '486×692', cdn: 'whatif.png', cdnL: 'whatif-light.png' }
+      { f: 'million', t: 'مسرح المسابقة وشيك المليون', d: '1279×709', cdn: 'https://i.ibb.co/nsSs2xXG/million.png', cdnL: 'https://i.ibb.co/Fb4HLGSN/million-light.png' },
+      { f: 'talk', t: 'اتنين من الشلة بيتكلموا', d: '900×490', cdn: 'https://i.ibb.co/QvfHx64Z/talk.png', cdnL: 'https://i.ibb.co/MkB4pQ2k/talk-light.png' },
+      { f: 'trip', t: 'الشلة في رحلة', d: '900×490', cdn: 'https://i.ibb.co/nNZRM4n5/trip.png', cdnL: 'https://i.ibb.co/RGGyqxsP/trip-light.png' },
+      { f: 'whatif', t: 'طفل ماسك علامة استفهام', d: '486×692', cdn: 'https://i.ibb.co/tMytNffL/whatif.png', cdnL: 'https://i.ibb.co/nMk1KM0k/whatif-light.png' }
     ];
-    const urlsRow = '<div class="arturls"><b>ملفات الصور في المشروع</b>' +
-      items.map((it) => '<a href="' + it.cdn + '" download>' + esc(it.f) + '.png — ' + it.d + '</a>' +
-        (it.cdnL !== it.cdn ? '<a href="' + it.cdnL + '" download>' + esc(it.f) + '-light.png</a>' : '')).join('') +
+    const urlsRow = '<div class="arturls"><b>روابط الصور الخارجية</b>' +
+      items.map((it) => '<a href="' + it.cdn + '" target="_blank" rel="noopener" download>' + esc(it.f) + '.png — ' + it.d + '</a>' +
+        (it.cdnL !== it.cdn ? '<a href="' + it.cdnL + '" target="_blank" rel="noopener" download>' + esc(it.f) + '-light.png</a>' : '')).join('') +
       '</div>';
     return '<section class="wrap page">' +
       '<span class="eyebrow">أصول جاهزة</span>' +
       '<h1 class="page__title">صور ورسومات</h1>' +
       '<p class="lead">رسومات بخط اليد بخلفية <b>شفافة تمامًا</b> (PNG). كل رسمة ليه نسختين: حبر غامق للخلفيات الفاتحة، وحبر فاتح للخلفيات الغامقة. اضغط «تحميل» وهاتلاقيها على جهازك جاهزة للقص.</p>' +
       '<div class="arts">' + items.map((it) => '<figure class="art">' +
-        '<div class="art__box art__box--dark"><img src="' + it.f + '-light.png" data-cdn="' + (it.cdnL || it.cdn) + '" alt="' + esc(it.t) + ' (حبر فاتح)" loading="lazy"></div>' +
-        '<div class="art__box art__box--light"><img src="' + it.f + '.png" data-cdn="' + it.cdn + '" alt="' + esc(it.t) + ' (حبر غامق)" loading="lazy"></div>' +
+        '<div class="art__box art__box--dark"><img src="' + (it.cdnL || it.cdn) + '" alt="' + esc(it.t) + ' (حبر فاتح)" loading="lazy"></div>' +
+        '<div class="art__box art__box--light"><img src="' + it.cdn + '" alt="' + esc(it.t) + ' (حبر غامق)" loading="lazy"></div>' +
         '<figcaption><b>' + esc(it.t) + '</b><span>' + it.d + ' • PNG بخلفية شفافة</span>' +
         '<span class="art__dl">' +
-          '<a class="btn btn--ghost btn--sm" href="' + it.cdn + '" download>' + ICON('download') + ' حبر غامق</a>' +
-          '<a class="btn btn--ghost btn--sm" href="' + (it.cdnL || it.cdn) + '" download>' + ICON('download') + ' حبر فاتح</a>' +
+          '<a class="btn btn--ghost btn--sm" href="' + it.cdn + '" target="_blank" rel="noopener" download>' + ICON('download') + ' حبر غامق</a>' +
+          '<a class="btn btn--ghost btn--sm" href="' + (it.cdnL || it.cdn) + '" target="_blank" rel="noopener" download>' + ICON('download') + ' حبر فاتح</a>' +
         '</span></figcaption></figure>').join('') + '</div>' +
     '</section>' + urlsRow;
   }
@@ -15097,7 +15097,7 @@
         '<div class="mzband"><i style="--c:#ffb03a"></i><b>صعب</b><span>' + num(byLv[2]) + ' سؤال</span></div>' +
         '<div class="mzband"><i style="--c:#ff2d92"></i><b>صعب جدًا</b><span>' + num(byLv[3]) + ' سؤال</span></div>' +
       '</div>' +
-      '<div class="mzhero__art mzhero__art--small"><img src="million-light.png" alt="مسرح المسابقة وشيك المليون" width="1279" height="709" loading="lazy"></div>' +
+      '<div class="mzhero__art mzhero__art--small"><img src="https://i.ibb.co/Fb4HLGSN/million-light.png" alt="مسرح المسابقة وشيك المليون" width="1279" height="709" loading="lazy"></div>' +
       '<p class="hint">كل جولة بتسحب ١٠ أسئلة من كل مستوى بشكل عشوائي — يعني كل لاعب بيقابل أسئلة مختلفة.</p>' +
       adSlot() +
     '</section>';
