@@ -12512,6 +12512,7 @@
   function roomAttach(code) {
     roomDetach();
     ROOM.code = code;
+    roomStartPresence(code);
     ROOM.data = null;
     ROOM.ref = FB.watch('rooms/' + code, (v) => {
       ROOM.data = v;
@@ -12527,9 +12528,43 @@
   }
 
   function roomDetach() {
+    roomStopPresence();
     if (ROOM.ref) FB.off(ROOM.ref);
     ROOM.ref = null;
     roomStopTimer();
+  }
+
+  // Separate session per tab: closing one tab must not disconnect another.
+  let roomPresenceStop = null;
+  function roomStopPresence() {
+    if (roomPresenceStop) roomPresenceStop();
+    roomPresenceStop = null;
+  }
+  function roomStartPresence(code) {
+    if (!AUTH.user) return;
+    const db = FB.mod.db;
+    const session = db.push(FB.ref('rooms/' + code + '/presence/' + AUTH.user.id));
+    let stopped = false, timer = null;
+    const beat = () => db.set(session, db.serverTimestamp()).catch((e) => console.warn('Room heartbeat:', e.code));
+    const disconnect = db.onDisconnect(session);
+    const unsubscribe = db.onValue(FB.ref('.info/connected'), async (snap) => {
+      if (snap.val() !== true || stopped) return;
+      clearInterval(timer);
+      try {
+        // Register server-side removal BEFORE publishing online presence.
+        await disconnect.remove();
+        if (stopped) { await disconnect.cancel(); return; }
+        await beat();
+        if (!stopped) timer = setInterval(beat, 60000);
+      } catch (e) { console.warn('Room presence:', e.code); }
+    });
+    roomPresenceStop = () => {
+      stopped = true;
+      clearInterval(timer);
+      unsubscribe();
+      // Leave disconnect removal armed if this write fails/offline.
+      db.remove(session).then(() => disconnect.cancel()).catch(() => {});
+    };
   }
 
   /* السؤال بيتعرض بنفس ترتيب اختياراته لكل اللاعبين (بيتبني من التقدّم نفسه) */
