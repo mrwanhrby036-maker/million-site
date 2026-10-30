@@ -11227,6 +11227,12 @@
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.prototype.slice.call((r || document).querySelectorAll(s));
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // Client validation protects rendering, not authorization or score integrity.
+  const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+  const validKey = (key) => typeof key === 'string' && key.length > 0 && key.length <= 128 && !/[.#$\[\]\/\u0000-\u001f\u007f]/.test(key) && !['__proto__', 'constructor', 'prototype'].includes(key);
+  const boundedText = (value, max) => typeof value === 'string' ? value.slice(0, max) : '';
+  const safeDecode = (value) => { try { return decodeURIComponent(value); } catch (e) { return ''; } };
+
   const rnd = (n) => Math.floor(Math.random() * n);
   const pick = (a) => a[rnd(a.length)];
   const shuffle = (a) => { const b = a.slice(); for (let i = b.length - 1; i > 0; i--) { const j = rnd(i + 1); const t = b[i]; b[i] = b[j]; b[j] = t; } return b; };
@@ -11424,20 +11430,26 @@
 
   /* أسئلة الزوار — جاية من Firebase (مفيش أسئلة محلية) */
   function customQuestions() {
-    return Object.keys(DATA.questions || {}).map((key) => {
-      const v = DATA.questions[key] || {};
-      const opts = ['o0', 'o1', 'o2', 'o3'].map((k) => v[k]).filter((x) => typeof x === 'string' && x.trim());
-      return { id: key, q: v.q, o: opts, c: v.c || 'weird', custom: true, by: v.name || '', at: v.at || 0 };
-    }).sort((a, b) => (b.at || 0) - (a.at || 0));
+    const records = isRecord(DATA.questions) ? DATA.questions : {};
+    return Object.keys(records).filter(validKey).flatMap((key) => {
+      const v = records[key];
+      if (!isRecord(v) || typeof v.q !== 'string' || v.q.length < 8 || v.q.length > 160) return [];
+      if (![v.o0, v.o1].every(o => typeof o === 'string' && o.trim() && o.length <= 60)) return [];
+      const opts = ['o0', 'o1', 'o2', 'o3'].map((k) => v[k]).filter((x) => typeof x === 'string' && x.trim() && x.length <= 60);
+      if (opts.length < 2) return [];
+      return [{ id: key, q: v.q, o: opts, c: catOf(v.c) ? v.c : 'weird', custom: true,
+        by: boundedText(v.name, 40), at: Number.isFinite(v.at) && v.at >= 0 ? v.at : 0 }];
+    }).sort((a, b) => b.at - a.at);
   }
 
   /* الأصوات الحقيقية من قاعدة البيانات */
   function countsOf(q) {
-    const row = (DATA.votes && DATA.votes[q.id]) || {};
+    const candidate = DATA.votes && DATA.votes[q.id];
+    const row = isRecord(candidate) ? candidate : {};
     const out = q.o.map(() => 0);
     Object.keys(row).forEach((uid) => {
-      const i = Number(row[uid]);
-      if (i >= 0 && i < out.length) out[i] += 1;
+      const i = row[uid];
+      if (Number.isInteger(i) && i >= 0 && i < out.length) out[i] += 1;
     });
     return out;
   }
@@ -11673,7 +11685,7 @@
   /* ==========================================================
      7) مشاركة
      ========================================================== */
-  const pageUrl = () => location.href.split('#')[0];
+  const pageUrl = () => location.origin + location.pathname;
   const qUrl = (id) => pageUrl() + '#/q/' + encodeURIComponent(id);
 
   async function copyText(txt) {
@@ -11983,9 +11995,9 @@
     validEmail(e) { return /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/.test(String(e || '').trim()); },
 
     validate(name, email, pw) {
-      if (!name || name.length < 2) return 'اكتب اسمك (حرفين على الأقل).';
-      if (!AUTH.validEmail(email)) return 'اكتب إيميل صحيح زي name@example.com.';
-      if (!pw || pw.length < 6) return 'كلمة المرور لازم ٦ حروف أو أرقام على الأقل.';
+      if (typeof name !== 'string' || name.length < 2 || name.length > 40) return 'الاسم لازم يكون من حرفين لحد ٤٠ حرف.';
+      if (typeof email !== 'string' || email.length > 254 || !AUTH.validEmail(email)) return 'اكتب إيميل صحيح زي name@example.com.';
+      if (typeof pw !== 'string' || pw.length < 6 || pw.length > 4096) return 'طول كلمة المرور غير مناسب — استخدم ٦ أحرف على الأقل.';
       return '';
     },
 
@@ -11995,8 +12007,8 @@
         'auth/email-already-in-use': 'الإيميل ده متسجل قبل كده — جرّب تسجيل الدخول.',
         'auth/invalid-email': 'الإيميل مش صحيح.',
         'auth/weak-password': 'كلمة المرور ضعيفة — ٦ حروف على الأقل.',
-        'auth/user-not-found': 'مفيش حساب بالإيميل ده.',
-        'auth/wrong-password': 'كلمة المرور غلط.',
+        'auth/user-not-found': 'الإيميل أو كلمة المرور غير صحيحة.',
+        'auth/wrong-password': 'الإيميل أو كلمة المرور غير صحيحة.',
         'auth/invalid-credential': 'الإيميل أو كلمة المرور غلط.',
         'auth/invalid-login-credentials': 'الإيميل أو كلمة المرور غلط.',
         'auth/too-many-requests': 'محاولات كثيرة — استنى شوية وجرّب تاني.',
@@ -12515,7 +12527,10 @@
 
   function roomPlayers() {
     const p = (ROOM.data && ROOM.data.players) || {};
-    return Object.keys(p).map((uid) => Object.assign({ uid: uid }, p[uid]));
+    if (!isRecord(p)) return [];
+    return Object.keys(p).filter((uid) => validKey(uid) && isRecord(p[uid]))
+      .map((uid) => ({ uid, name: boundedText(p[uid].name, 20) || 'لاعب',
+        team: p[uid].team === 'b' ? 'b' : 'a', ready: p[uid].ready === true }));
   }
   function teamMembers(t) {
     return roomPlayers().filter((p) => (p.team || 'a') === t);
@@ -12551,13 +12566,12 @@
     ROOM.code = code;
     roomStartPresence(code);
     ROOM.data = null;
+    ROOM.decks = Object.create(null);
     ROOM.ref = FB.watch('rooms/' + code, (v) => {
       ROOM.data = v;
       if (!v) {
-        if (parse().name === 'party' && parse().arg.toUpperCase() === code) {
-          toast('الغرفة مش موجودة');
-          location.hash = '#/party';
-        }
+        roomDetach(); ROOM.code = ''; ROOM.data = null;
+        if (parse().name === 'party') { toast('الغرفة غير موجودة'); location.hash = '#/party'; }
         return;
       }
       roomChanged();
@@ -12615,8 +12629,25 @@
     }
   }
 
+  const roomProgressPending = new Set();
+  async function roomEnsureProgress() {
+    if (!AUTH.user || !ROOM.code || roomMeta().state !== 'play' || myProgress()) return;
+    const uid = AUTH.user.id, code = ROOM.code;
+    if (!ROOM.data?.players?.[uid]) return;
+    const key = code + '/' + uid;
+    if (roomProgressPending.has(key)) return;
+    roomProgressPending.add(key);
+    try {
+      // Each player initializes only their own data; the host cannot write for others.
+      await FB.mod.db.runTransaction(FB.ref('rooms/' + code + '/progress/' + uid), current =>
+        current === null ? { q: 0, ok: 0, amount: 0, done: false, t: Date.now() } : undefined);
+    } catch (e) { toast(fbWriteError(e)); }
+    finally { roomProgressPending.delete(key); }
+  }
+
   let roomRenderT = null;
   function roomChanged() {
+    roomEnsureProgress();
     roomCheckTimer();
     roomWatchOpponent();
     clearTimeout(roomRenderT);
@@ -12637,15 +12668,13 @@
         const snap = await FB.mod.db.get(FB.ref('rooms/' + code));
         if (!snap.exists()) { available = true; break; }
       }
-      if (!available) { toast('مش قادرين نلاقي كود متاح — جرّب تاني'); return; }
+      if (!available) { toast('تعذر إنشاء كود متاح — جرّب تاني'); return; }
       await FB.mod.db.set(FB.ref('rooms/' + code + '/meta'), {
         host: AUTH.user.id, state: 'wait', size: size, questions: ROOM_QUESTIONS, secs: secs, at: Date.now()
       });
-      // الإنشاء ماسك القفل بالفعل، فنسجل صاحب الغرفة من غير ما نطلبه تاني.
-      if (await roomJoinUnlocked(code)) {
-        location.hash = '#/party/' + code;
-        toast('الغرفة اتفتحت — ابعت الكود لشلتك');
-      }
+      if (!await roomJoinUnlocked(code)) return;
+      location.hash = '#/party/' + code;
+      toast('الغرفة اتفتحت — ابعت الكود ' + code + ' لشلتك');
     } catch (e) {
       toast(fbWriteError(e));
     } finally {
@@ -12657,49 +12686,35 @@
     const snap = await FB.mod.db.get(FB.ref('rooms/' + code));
     if (!snap.exists()) { toast('مفيش غرفة بالكود ده'); return false; }
     const data = snap.val();
-    const players = data.players || {};
+    if (!isRecord(data) || !isRecord(data.meta)) { toast('بيانات الغرفة غير صالحة'); return false; }
+    const players = isRecord(data.players) ? data.players : {};
     if (!players[AUTH.user.id]) {
-      const meta = data.meta || {};
-      if ((meta.state || 'wait') !== 'wait') { toast('التحدي بدأ خلاص في الغرفة دي'); return false; }
-      const members = Object.keys(players).map((uid) => players[uid]);
-      const teamA = members.filter((p) => (p.team || 'a') === 'a').length;
-      const teamB = members.length - teamA;
-      const size = Number(meta.size || 4);
-      if (teamA >= size && teamB >= size) { toast('الغرفة كاملة'); return false; }
-      const team = teamA < size && (teamA <= teamB || teamB >= size) ? 'a' : 'b';
+      if ((data.meta.state || 'wait') !== 'wait') { toast('التحدي بدأ خلاص'); return false; }
+      const members = Object.values(players).filter(isRecord);
+      const a = members.filter(p => p.team === 'a').length, b = members.length - a;
+      const size = Number(data.meta.size || 4);
+      if (a >= size && b >= size) { toast('الغرفة كاملة'); return false; }
+      const team = a < size && (a <= b || b >= size) ? 'a' : 'b';
       await FB.mod.db.set(FB.ref('rooms/' + code + '/players/' + AUTH.user.id), {
-        name: (AUTH.user.name || 'لاعب').slice(0, 20), team: team, ready: false, at: Date.now()
+        name: (AUTH.user.name || 'لاعب').slice(0, 20), team, ready: false, at: Date.now()
       });
     }
     return true;
   }
 
-  async function roomJoin(code, fromRoomRoute) {
+  async function roomJoin(code, fromRoute) {
     if (!AUTH.user) return roomNeedAuth();
     code = String(code || '').trim().toUpperCase();
-    if (!/^[A-Z0-9]{4,8}$/.test(code)) {
-      toast('الكود مش صحيح');
-      if (fromRoomRoute) location.hash = '#/party';
-      return;
-    }
+    if (!/^[A-Z0-9]{4,8}$/.test(code)) { toast('الكود مش صحيح'); if (fromRoute) location.hash = '#/party'; return; }
     if (ROOM.busy) return;
     ROOM.busy = true;
     try {
-      const joined = await roomJoinUnlocked(code);
-      // لو المستخدم غيّر الصفحة أثناء التحميل، ما نرجعوش للغرفة غصب عنه.
-      if (fromRoomRoute && (parse().name !== 'party' || parse().arg.toUpperCase() !== code)) return;
-      if (!joined) { if (fromRoomRoute) location.hash = '#/party'; return; }
-      if (fromRoomRoute) roomAttach(code);
-      else location.hash = '#/party/' + code;
-    } catch (e) {
-      toast(fbWriteError(e));
-      if (fromRoomRoute && parse().name === 'party' && parse().arg.toUpperCase() === code) location.hash = '#/party';
-    } finally {
-      ROOM.busy = false;
-      // مسار غرفة تانية ممكن يكون اتفتح أثناء انتظار الطلب الأول.
-      const current = parse();
-      if (fromRoomRoute && current.name === 'party' && current.arg && current.arg.toUpperCase() !== code) render(false);
-    }
+      if (!await roomJoinUnlocked(code)) { if (fromRoute) location.hash = '#/party'; return; }
+      if (fromRoute) {
+        if (parse().name === 'party' && parse().arg.toUpperCase() === code) roomAttach(code);
+      } else location.hash = '#/party/' + code;
+    } catch (e) { toast(fbWriteError(e)); if (fromRoute) location.hash = '#/party'; }
+    finally { ROOM.busy = false; }
   }
 
   async function roomLeave(silent) {
@@ -12737,12 +12752,9 @@
     const a = teamMembers('a').length, b = teamMembers('b').length;
     if (!a || !b) { toast('محتاج لاعب واحد على الأقل في كل فريق'); return; }
     if (a > Number(meta.size) || b > Number(meta.size)) { toast('فريق فيه لاعبين أكتر من الحجم المحدد'); return; }
-    const ps = roomPlayers();
+    if (meta.state !== 'wait') return;
     const updates = {};
     const nq = ROOM_QUESTIONS;
-    ps.forEach((p) => {
-      updates['progress/' + p.uid] = { q: 0, ok: 0, amount: 0, done: false, t: 0 };
-    });
     updates['meta/state'] = 'play';
     updates['meta/at'] = Date.now();
     try {
@@ -12753,17 +12765,32 @@
 
   /* ---------- أسئلة كل فريق ---------- */
   function roomDeck(team) {
+    const cache = ROOM.decks || (ROOM.decks = Object.create(null));
+    const key = ROOM.code + ':' + team;
+    if (cache[key]) return cache[key];
+    // Reproducible ordering for this room/team, NOT an anti-cheat secret.
+    let seed = 2166136261;
+    for (const c of key) seed = Math.imul(seed ^ c.charCodeAt(0), 16777619) >>> 0;
+    const mix = (list) => {
+      const result = list.slice();
+      for (let i = result.length - 1; i > 0; i--) {
+        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+        const j = Math.floor((seed / 4294967296) * (i + 1));
+        [result[i], result[j]] = [result[j], result[i]];
+      }
+      return result;
+    };
     const n = ROOM_QUESTIONS;
     /* ١٠ من كل مستوى بنفس ترتيب اللعبة الفردية — والفريق «ب» بيمشي على ترتيب مستوى معاكس عشان الأسئلة تختلف */
     const bands = team === 'a' ? [1, 2, 3, 4] : [2, 1, 4, 3];
     const deck = [];
     bands.forEach((lv) => {
-      shuffle(MBANK.filter((q) => q.l === lv)).slice(0, Math.ceil(n / 4)).forEach((q) => deck.push(q.id));
+      mix(MBANK.filter((q) => q.l === lv)).slice(0, Math.ceil(n / 4)).forEach((q) => deck.push(q.id));
     });
     if (deck.length < n) {
-      shuffle(MBANK.filter((q) => deck.indexOf(q.id) === -1)).slice(0, n - deck.length).forEach((q) => deck.push(q.id));
+      mix(MBANK.filter((q) => deck.indexOf(q.id) === -1)).slice(0, n - deck.length).forEach((q) => deck.push(q.id));
     }
-    return deck.slice(0, n).map((id) => ({ id: id }));
+    return (cache[key] = deck.slice(0, n).map((id) => ({ id: id })));
   }
 
   function roomProgressOf(uid) {
@@ -12937,9 +12964,9 @@
     if (ROOM.code !== code) {
       if (ROOM.ref) { roomDetach(); ROOM.code = ''; ROOM.data = null; }
       if (!ROOM.busy) roomJoin(code, true);
-      return '<section class="wrap page"><div class="empty"><span class="spin"></span> بنفتح الغرفة…</div></section>';
+      return '<section class="wrap page"><div class="empty">بنفتح الغرفة…</div></section>';
     }
-    if (!ROOM.data) return '<section class="wrap page"><div class="empty"><span class="spin"></span> بنفتح الغرفة…</div></section>';
+    if (!ROOM.data) return '<section class="wrap page"><div class="empty">جارٍ تحميل الغرفة…</div></section>';
     const meta = roomMeta();
     if ((meta.state || 'wait') === 'wait') return roomLobbyHTML();
     return roomPlayHTML();
@@ -12965,15 +12992,11 @@
 
     return '<section class="wrap page">' +
       '<span class="chip chip--live">' + ICON('users') + ' تحدي الشلة</span>' +
-      '<h1 class="page__title">غرفة الانتظار</h1>' +
+      '<h1 class="page__title">غرفة <b dir="ltr">' + esc(ROOM.code) + '</b></h1>' +
       '<p class="lead">' + (isHost ? 'إنت منشئ الغرفة — ظبّط الحجم وابدأ لما الفريقين يجهزوا.' : 'استنى منشئ الغرفة يبدأ التحدي.') + '</p>' +
-      '<div class="roominvite">' +
-        '<span class="roominvite__label">كود الغرفة</span>' +
-        '<div class="roomcode" dir="ltr">' + esc(ROOM.code) + '</div>' +
-        '<p class="hint">ابعت الكود لشلتك عشان يدخلوا معاك</p>' +
-        '<button class="btn btn--primary btn--sm" data-act="room-copy">' + ICON('link') + ' نسخ الكود</button>' +
-      '</div>' +
+      '<div class="roomcode" dir="ltr">' + esc(ROOM.code) + '</div>' +
       '<div class="card__actions" style="justify-content:center">' +
+        '<button class="btn btn--ghost btn--sm" data-act="room-copy">' + ICON('link') + ' انسخ كود الغرفة</button>' +
         '<button class="btn btn--ghost btn--sm" data-act="room-leave">' + ICON('logout') + ' خروج من الغرفة</button>' +
       '</div>' +
       (isHost
@@ -13080,7 +13103,14 @@
   function viewTrending() {
     const list = allQuestions().map((q) => ({ q, n: realVotes(q) })).sort((a, b) => b.n - a.n);
     const voted = list.filter((x) => x.n > 0).length;
-    const board = Object.keys(DATA.board || {}).map((uid) => Object.assign({ uid: uid }, DATA.board[uid]))
+    const records = isRecord(DATA.board) ? DATA.board : {};
+    const board = Object.keys(records).filter((uid) => validKey(uid) && isRecord(records[uid]))
+      .map((uid) => {
+        const p = records[uid];
+        const score = (v, max) => Number.isFinite(v) && v >= 0 ? Math.min(Math.floor(v), max) : 0;
+        return { uid, name: boundedText(p.name, 40), best: score(p.best, 1000000),
+          wins: score(p.wins, Number.MAX_SAFE_INTEGER), plays: score(p.plays, Number.MAX_SAFE_INTEGER) };
+      })
       .filter((p) => Number(p.best || 0) > 0)
       .sort((a, b) => Number(b.best || 0) - Number(a.best || 0))
       .slice(0, 10);
@@ -13300,8 +13330,10 @@
     const h = (location.hash || '#/').replace(/^#\/?/, '');
     const parts = h.split('?');
     const seg = parts[0].split('/').filter(Boolean);
-    const params = {};
-    if (parts[1]) new URLSearchParams(parts[1]).forEach((v, k) => { params[k] = v; });
+    const params = Object.create(null);
+    if (parts[1]) new URLSearchParams(parts[1]).forEach((v, k) => {
+      if (['tab', 'cat', 'q'].includes(k) && v.length <= 160) params[k] = v;
+    });
     return { name: seg[0] || 'home', arg: seg[1] || '', params };
   }
 
@@ -13313,7 +13345,7 @@
     switch (r.name) {
       case 'home': html = viewHome(); break;
       case 'play': html = viewPlay(r.params); break;
-      case 'q': html = viewSingle(decodeURIComponent(r.arg)); break;
+      case 'q': html = viewSingle(safeDecode(r.arg)); break;
       case 'party':
         if (r.arg) html = viewRoom(r.arg.toUpperCase());
         else html = viewParty();
@@ -13445,7 +13477,7 @@
     if (act === 'room-start') { roomStart(); return; }
     if (act === 'room-copy') {
       copyText(ROOM.code).then((ok) => {
-        toast(ok ? 'اتنسخ كود الغرفة — ابعته للشلة' : 'النسخ مش متاح — حدّد الكود وانسخه يدويًا');
+        toast(ok ? 'اتنسخ كود الغرفة — ابعته للشلة' : 'كود الغرفة: ' + ROOM.code);
       });
       return;
     }
@@ -13608,7 +13640,7 @@
       confetti(window.innerWidth / 2, window.innerHeight * 0.4, 20);
       toast('سؤالك اتنشر في قاعدة البيانات — شاركه مع الشلة');
     } catch (err) {
-      toast((err && err.message) || fbWriteError(err));
+      toast(fbWriteError(err));
     } finally {
       if (btn) btn.disabled = false;
     }
