@@ -11725,6 +11725,41 @@
      • Realtime Database       : التصويتات، الأسئلة، الإحصائيات، المتصدرين
      الإعدادات في الثابت FB_CONFIG تحت — مفيش وضع تجريبي ولا حسابات محلية.
      ========================================================== */
+  // A session per tab, with server timestamps; history survives disconnects.
+  let userActivityStop = null;
+  function startActivity(path, historyPath) {
+    const db = FB.mod.db;
+    const root = FB.ref(path);
+    const id = db.push(FB.ref(path + '/sessions')).key;
+    let stopped = false, timer = null, connected = false;
+    const disconnect = db.onDisconnect(root);
+    const offline = () => ({ ['sessions/' + id]: null, lastSeen: db.serverTimestamp() });
+    const beat = async () => {
+      if (stopped || !connected) return;
+      const updates = { [path + '/sessions/' + id]: db.serverTimestamp(), [path + '/lastSeen']: db.serverTimestamp() };
+      if (historyPath) updates[historyPath] = db.serverTimestamp();
+      try { await db.update(FB.ref(''), updates); }
+      catch (e) { console.warn('Activity heartbeat:', e.code); }
+    };
+    const unsubscribe = db.onValue(FB.ref('.info/connected'), async snap => {
+      connected = snap.val() === true;
+      clearInterval(timer);
+      if (!connected || stopped) return;
+      try {
+        await disconnect.update(offline());
+        if (stopped) { await disconnect.cancel(); return; }
+        await beat();
+        if (!stopped) timer = setInterval(beat, 60000);
+      } catch (e) { console.warn('Activity connection:', e.code); }
+    });
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+      unsubscribe();
+      db.update(root, offline()).then(() => disconnect.cancel()).catch(() => {});
+    };
+  }
+
   /* مفتاح المشروع — نفس كائن firebaseConfig بالحرف (مدمج هنا، مفيش ملف إعداد خارجي) */
   const FB_CONFIG = {
     apiKey: 'AIzaSyBeor8MTz1uaQumT3C4FFE6M7FZisPvom0',
@@ -11836,6 +11871,8 @@
         return;
       }
       FB.mod.auth.onAuthStateChanged(FB.auth, (u) => {
+        if (userActivityStop) userActivityStop();
+        userActivityStop = null;
         AUTH.user = u ? AUTH.normalize({
           id: u.uid,
           name: u.displayName || (u.email || '').split('@')[0],
@@ -11846,7 +11883,7 @@
         AUTH.loaded = true;
         AUTH.emit();
         syncChrome();
-        if (AUTH.user) { DATA.start(); AUTH.saveProfile(); }
+        if (AUTH.user) { DATA.start(); AUTH.saveProfile(); userActivityStop = startActivity('userActivity/' + AUTH.user.id); }
         else { DATA.stop(); roomLeave(true); }
         const r = parse();
         if (r.name === 'auth' || r.name === 'million' || r.name === 'home' || r.name === 'party') render(false);
@@ -12527,6 +12564,7 @@
   function roomAttach(code) {
     roomDetach();
     ROOM.code = code;
+    roomStartPresence(code);
     ROOM.data = null;
     ROOM.decks = Object.create(null);
     ROOM.ref = FB.watch('rooms/' + code, (v) => {
@@ -12541,9 +12579,24 @@
   }
 
   function roomDetach() {
+    roomStopPresence();
     if (ROOM.ref) FB.off(ROOM.ref);
     ROOM.ref = null;
     roomStopTimer();
+  }
+
+  // Separate session per tab: closing one tab must not disconnect another.
+  let roomPresenceStop = null;
+  function roomStopPresence() {
+    if (roomPresenceStop) roomPresenceStop();
+    roomPresenceStop = null;
+  }
+  function roomStartPresence(code) {
+    if (!AUTH.user) return;
+    roomPresenceStop = startActivity(
+      'rooms/' + code + '/activity/' + AUTH.user.id,
+      'rooms/' + code + '/lastActivity/' + AUTH.user.id
+    );
   }
 
   /* السؤال بيتعرض بنفس ترتيب اختياراته لكل اللاعبين (بيتبني من التقدّم نفسه) */
