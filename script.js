@@ -11837,7 +11837,7 @@
         if (AUTH.user) { DATA.start(); AUTH.saveProfile(); }
         else { DATA.stop(); roomLeave(true); }
         const r = parse();
-        if (r.name === 'auth' || r.name === 'million' || r.name === 'home') render(false);
+        if (r.name === 'auth' || r.name === 'million' || r.name === 'home' || r.name === 'party') render(false);
       });
     },
 
@@ -12513,13 +12513,14 @@
     roomDetach();
     ROOM.code = code;
     roomStartPresence(code);
+    ROOM.data = null;
     ROOM.ref = FB.watch('rooms/' + code, (v) => {
       ROOM.data = v;
       if (!v) {
-        roomDetach();
-        ROOM.code = ''; ROOM.data = null;
-        toast('الغرفة اتقفلت لعدم وجود لاعبين متصلين');
-        location.hash = '#/party';
+        if (parse().name === 'party' && parse().arg.toUpperCase() === code) {
+          toast('الغرفة مش موجودة');
+          location.hash = '#/party';
+        }
         return;
       }
       roomChanged();
@@ -12602,7 +12603,7 @@
     roomWatchOpponent();
     clearTimeout(roomRenderT);
     roomRenderT = setTimeout(() => {
-      if (parse().name === 'party' && parse().arg === ROOM.code) render(false);
+      if (parse().name === 'party' && parse().arg.toUpperCase() === ROOM.code) render(false);
     }, 200);
   }
 
@@ -12612,18 +12613,21 @@
     if (ROOM.busy) return;
     ROOM.busy = true;
     try {
-      let code = randCode(), tries = 0;
-      while (tries++ < 6) {
-        const snap = await FB.mod.db.get(FB.ref('rooms/' + code));
-        if (!snap.exists()) break;
+      let code = '', available = false;
+      for (let tries = 0; tries < 6; tries++) {
         code = randCode();
+        const snap = await FB.mod.db.get(FB.ref('rooms/' + code));
+        if (!snap.exists()) { available = true; break; }
       }
+      if (!available) { toast('مش قادرين نلاقي كود متاح — جرّب تاني'); return; }
       await FB.mod.db.set(FB.ref('rooms/' + code + '/meta'), {
         host: AUTH.user.id, state: 'wait', size: size, questions: ROOM_QUESTIONS, secs: secs, at: Date.now()
       });
-      ROOM.busy = false;
-      await roomJoin(code);
-      toast('الغرفة اتفتحت — ابعت الكود ' + code + ' لشلتك');
+      // الإنشاء ماسك القفل بالفعل، فنسجل صاحب الغرفة من غير ما نطلبه تاني.
+      if (await roomJoinUnlocked(code)) {
+        location.hash = '#/party/' + code;
+        toast('الغرفة اتفتحت — ابعت الكود لشلتك');
+      }
     } catch (e) {
       toast(fbWriteError(e));
     } finally {
@@ -12631,31 +12635,52 @@
     }
   }
 
-  async function roomJoin(code) {
+  async function roomJoinUnlocked(code) {
+    const snap = await FB.mod.db.get(FB.ref('rooms/' + code));
+    if (!snap.exists()) { toast('مفيش غرفة بالكود ده'); return false; }
+    const data = snap.val();
+    const players = data.players || {};
+    if (!players[AUTH.user.id]) {
+      const meta = data.meta || {};
+      if ((meta.state || 'wait') !== 'wait') { toast('التحدي بدأ خلاص في الغرفة دي'); return false; }
+      const members = Object.keys(players).map((uid) => players[uid]);
+      const teamA = members.filter((p) => (p.team || 'a') === 'a').length;
+      const teamB = members.length - teamA;
+      const size = Number(meta.size || 4);
+      if (teamA >= size && teamB >= size) { toast('الغرفة كاملة'); return false; }
+      const team = teamA < size && (teamA <= teamB || teamB >= size) ? 'a' : 'b';
+      await FB.mod.db.set(FB.ref('rooms/' + code + '/players/' + AUTH.user.id), {
+        name: (AUTH.user.name || 'لاعب').slice(0, 20), team: team, ready: false, at: Date.now()
+      });
+    }
+    return true;
+  }
+
+  async function roomJoin(code, fromRoomRoute) {
     if (!AUTH.user) return roomNeedAuth();
     code = String(code || '').trim().toUpperCase();
-    if (!/^[A-Z0-9]{4,8}$/.test(code)) { toast('الكود مش صحيح'); return; }
+    if (!/^[A-Z0-9]{4,8}$/.test(code)) {
+      toast('الكود مش صحيح');
+      if (fromRoomRoute) location.hash = '#/party';
+      return;
+    }
     if (ROOM.busy) return;
     ROOM.busy = true;
     try {
-      const snap = await FB.mod.db.get(FB.ref('rooms/' + code));
-      if (!snap.exists()) { toast('مفيش غرفة بالكود ده'); return; }
-      const data = snap.val();
-      if (!data.players || !data.players[AUTH.user.id]) {
-        const state = (data.meta && data.meta.state) || 'wait';
-        if (state !== 'wait') { toast('التحدي بدأ خلاص في الغرفة دي'); return; }
-        if (roomPlayers().length >= 8) { toast('الغرفة كاملة (٨ لاعبين)'); return; }
-        const teamA = teamMembers('a').length, teamB = teamMembers('b').length;
-        const team = teamA <= teamB ? 'a' : 'b';
-        await FB.mod.db.set(FB.ref('rooms/' + code + '/players/' + AUTH.user.id), {
-          name: (AUTH.user.name || 'لاعب').slice(0, 20), team: team, ready: false, at: Date.now()
-        });
-      }
-      location.hash = '#/party/' + code;
+      const joined = await roomJoinUnlocked(code);
+      // لو المستخدم غيّر الصفحة أثناء التحميل، ما نرجعوش للغرفة غصب عنه.
+      if (fromRoomRoute && (parse().name !== 'party' || parse().arg.toUpperCase() !== code)) return;
+      if (!joined) { if (fromRoomRoute) location.hash = '#/party'; return; }
+      if (fromRoomRoute) roomAttach(code);
+      else location.hash = '#/party/' + code;
     } catch (e) {
       toast(fbWriteError(e));
+      if (fromRoomRoute && parse().name === 'party' && parse().arg.toUpperCase() === code) location.hash = '#/party';
     } finally {
       ROOM.busy = false;
+      // مسار غرفة تانية ممكن يكون اتفتح أثناء انتظار الطلب الأول.
+      const current = parse();
+      if (fromRoomRoute && current.name === 'party' && current.arg && current.arg.toUpperCase() !== code) render(false);
     }
   }
 
@@ -12891,29 +12916,12 @@
       '</section>';
     }
     if (!code) return viewParty();
-    if (!ROOM.code || ROOM.code !== code) {
-      /* اتأكد إن الغرفة موجودة واللاعب عضو فيها */
-      if (!ROOM.busy) {
-        ROOM.busy = true;
-        FB.mod.db.get(FB.ref('rooms/' + code)).then((snap) => {
-          ROOM.busy = false;
-          if (!snap.exists()) { toast('مفيش غرفة بالكود ده'); location.hash = '#/party'; return; }
-          const data = snap.val();
-          if (!data.players || !data.players[AUTH.user.id]) {
-            const state = (data.meta && data.meta.state) || 'wait';
-            if (state !== 'wait') { toast('التحدي بدأ خلاص في الغرفة دي'); location.hash = '#/party'; return; }
-            const teamA = ((data.players && Object.keys(data.players).filter((k) => (data.players[k].team || 'a') === 'a').length) || 0);
-            const teamB = ((data.players && Object.keys(data.players).length) || 0) - teamA;
-            FB.mod.db.set(FB.ref('rooms/' + code + '/players/' + AUTH.user.id), {
-              name: (AUTH.user.name || 'لاعب').slice(0, 20), team: teamA <= teamB ? 'a' : 'b', ready: false, at: Date.now()
-            }).then(() => roomAttach(code)).catch(() => {});
-            return;
-          }
-          roomAttach(code);
-        }).catch(() => { ROOM.busy = false; });
-      }
+    if (ROOM.code !== code) {
+      if (ROOM.ref) { roomDetach(); ROOM.code = ''; ROOM.data = null; }
+      if (!ROOM.busy) roomJoin(code, true);
       return '<section class="wrap page"><div class="empty"><span class="spin"></span> بنفتح الغرفة…</div></section>';
     }
+    if (!ROOM.data) return '<section class="wrap page"><div class="empty"><span class="spin"></span> بنفتح الغرفة…</div></section>';
     const meta = roomMeta();
     if ((meta.state || 'wait') === 'wait') return roomLobbyHTML();
     return roomPlayHTML();
@@ -12939,11 +12947,15 @@
 
     return '<section class="wrap page">' +
       '<span class="chip chip--live">' + ICON('users') + ' تحدي الشلة</span>' +
-      '<h1 class="page__title">غرفة <b dir="ltr">' + esc(ROOM.code) + '</b></h1>' +
+      '<h1 class="page__title">غرفة الانتظار</h1>' +
       '<p class="lead">' + (isHost ? 'إنت منشئ الغرفة — ظبّط الحجم وابدأ لما الفريقين يجهزوا.' : 'استنى منشئ الغرفة يبدأ التحدي.') + '</p>' +
-      '<div class="roomcode" dir="ltr">' + esc(ROOM.code) + '</div>' +
+      '<div class="roominvite">' +
+        '<span class="roominvite__label">كود الغرفة</span>' +
+        '<div class="roomcode" dir="ltr">' + esc(ROOM.code) + '</div>' +
+        '<p class="hint">ابعت الكود لشلتك عشان يدخلوا معاك</p>' +
+        '<button class="btn btn--primary btn--sm" data-act="room-copy">' + ICON('link') + ' نسخ الكود</button>' +
+      '</div>' +
       '<div class="card__actions" style="justify-content:center">' +
-        '<button class="btn btn--ghost btn--sm" data-act="room-copy">' + ICON('link') + ' انسخ كود الغرفة</button>' +
         '<button class="btn btn--ghost btn--sm" data-act="room-leave">' + ICON('logout') + ' خروج من الغرفة</button>' +
       '</div>' +
       (isHost
@@ -13311,10 +13323,7 @@
     if (r.name === 'games' && r.arg === 'quiz' && STATE.game.running) startGameTimer();
     if (r.name === 'games' && r.arg === 'play') mountGameFrame();
     /* غرف تحدي الشلة: ربط/فك المزامنة اللحظية على حسب المسار */
-    if (r.name === 'party' && r.arg) {
-      const rc = r.arg.toUpperCase();
-      if (ROOM.code !== rc) roomAttach(rc);
-    } else if (ROOM.ref) {
+    if (!(r.name === 'party' && r.arg) && ROOM.ref) {
       roomDetach();
       ROOM.code = ''; ROOM.data = null;
     }
@@ -13418,7 +13427,7 @@
     if (act === 'room-start') { roomStart(); return; }
     if (act === 'room-copy') {
       copyText(ROOM.code).then((ok) => {
-        toast(ok ? 'اتنسخ كود الغرفة — ابعته للشلة' : 'كود الغرفة: ' + ROOM.code);
+        toast(ok ? 'اتنسخ كود الغرفة — ابعته للشلة' : 'النسخ مش متاح — حدّد الكود وانسخه يدويًا');
       });
       return;
     }
