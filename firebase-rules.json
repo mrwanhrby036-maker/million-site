@@ -3,26 +3,56 @@
     "profiles": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && auth.uid === $uid"
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['uid', 'name', 'email', 'at'])",
+        "uid": {
+          ".validate": "newData.isString() && newData.val() === $uid"
+        },
+        "name": {
+          ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40"
+        },
+        "email": {
+          ".validate": "newData.isString() && newData.val().length >= 0 && newData.val().length <= 254"
+        },
+        "at": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 8640000000000000"
+        },
+        "$other": {
+          ".validate": false
+        }
       }
     },
     "stats": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && auth.uid === $uid"
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['plays', 'wins', 'best']) && newData.child('wins').val() <= newData.child('plays').val()",
+        "plays": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 9007199254740991"
+        },
+        "wins": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 9007199254740991"
+        },
+        "best": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000"
+        },
+        "$other": {
+          ".validate": false
+        }
       }
     },
     "votes": {
       "$qid": {
-        ".read": true,
+        ".read": "auth != null",
         "$uid": {
           ".write": "auth != null && auth.uid === $uid",
-          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 3"
+          ".validate": "newData.isNumber() && (newData.val() === 0 || newData.val() === 1 || newData.val() === 2 || newData.val() === 3)"
         }
-      }
+      },
+      ".read": "auth != null"
     },
     "questions": {
-      ".read": true,
+      ".read": "auth != null",
       "$qid": {
         ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid)",
         "q": {
@@ -44,7 +74,7 @@
           ".validate": "newData.isString() && newData.val().length <= 20"
         },
         "uid": {
-          ".validate": "newData.val() === auth.uid"
+          ".validate": "newData.isString() && newData.val() === auth.uid && (!data.exists() || newData.val() === data.val())"
         },
         "name": {
           ".validate": "newData.isString() && newData.val().length <= 40"
@@ -54,50 +84,93 @@
         },
         "$other": {
           ".validate": false
-        }
+        },
+        ".validate": "newData.hasChildren(['q', 'o0', 'o1', 'c', 'uid', 'name', 'at'])"
       }
     },
     "rooms": {
-      ".read": "auth != null",
       "$code": {
         ".read": "auth != null",
         "meta": {
           ".write": "auth != null && (!data.exists() || data.child('host').val() === auth.uid)",
-          "state": { ".validate": "newData.isString() && newData.val().length <= 12" },
-          "size": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 4" },
-          "questions": { ".validate": "newData.isNumber() && newData.val() >= 5 && newData.val() <= 40" },
-          "secs": { ".validate": "newData.isNumber() && newData.val() >= 10 && newData.val() <= 90" },
-          "res": { ".validate": "newData.val() == null || (newData.isString() && newData.val().length <= 4)" },
-          "host": { ".validate": "newData.isString() && newData.val() === auth.uid" },
-          "at": { ".validate": "newData.isNumber()" },
-          "$other": { ".validate": false }
+          "state": {
+            ".validate": "newData.val() === 'wait' || newData.val() === 'play' || newData.val() === 'done'"
+          },
+          "size": {
+            ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 4"
+          },
+          "questions": {
+            ".validate": "newData.isNumber() && newData.val() >= 5 && newData.val() <= 40"
+          },
+          "secs": {
+            ".validate": "newData.isNumber() && newData.val() >= 10 && newData.val() <= 90"
+          },
+          "res": {
+            ".validate": "newData.val() == null || (newData.isString() && newData.val().length <= 4)"
+          },
+          "host": {
+            ".validate": "newData.isString() && newData.val() === auth.uid"
+          },
+          "at": {
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": false
+          },
+          ".validate": "newData.hasChildren(['host', 'state', 'size', 'questions', 'secs', 'at'])"
         },
         "players": {
           "$uid": {
-            ".write": "auth != null && auth.uid === $uid",
-            "name": { ".validate": "newData.isString() && newData.val().length <= 20" },
-            "team": { ".validate": "newData.val() === 'a' || newData.val() === 'b'" },
-            "ready": { ".validate": "newData.isBoolean()" },
-            "act": { ".validate": "newData.val() == null || (newData.isString() && newData.val().length <= 12)" },
-            "at": { ".validate": "newData.isNumber()" },
-            "$other": { ".validate": false }
+            ".write": "auth != null && auth.uid === $uid && (!newData.exists() || root.child('rooms').child($code).child('meta').exists())",
+            "name": {
+              ".validate": "newData.isString() && newData.val().length <= 20"
+            },
+            "team": {
+              ".validate": "newData.val() === 'a' || newData.val() === 'b'"
+            },
+            "ready": {
+              ".validate": "newData.isBoolean()"
+            },
+            "act": {
+              ".validate": "newData.val() == null || (newData.isString() && newData.val().length <= 12)"
+            },
+            "at": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            },
+            ".validate": "newData.hasChildren(['name', 'team', 'ready', 'at']) && ((!data.exists() && root.child('rooms').child($code).child('meta').child('state').val() === 'wait') || (data.exists() && (root.child('rooms').child($code).child('meta').child('state').val() === 'wait' || (newData.child('team').val() === data.child('team').val() && newData.child('name').val() === data.child('name').val() && newData.child('ready').val() === data.child('ready').val()))))"
           }
         },
         "progress": {
           "$uid": {
-            ".write": "auth != null && auth.uid === $uid",
-            "q": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 40" },
-            "ok": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 40" },
-            "amount": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000" },
-            "done": { ".validate": "newData.isBoolean()" },
-            "t": { ".validate": "newData.isNumber()" },
-            "$other": { ".validate": false }
+            ".write": "auth != null && auth.uid === $uid && (!newData.exists() || (root.child('rooms').child($code).child('meta').child('state').val() === 'play' && root.child('rooms').child($code).child('players').child(auth.uid).exists()))",
+            "q": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 40"
+            },
+            "ok": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 40"
+            },
+            "amount": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000"
+            },
+            "done": {
+              ".validate": "newData.isBoolean()"
+            },
+            "t": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            },
+            ".validate": "newData.hasChildren(['q', 'ok', 'amount', 'done', 't'])"
           }
         }
       }
     },
     "leaderboard": {
-      ".read": true,
+      ".read": "auth != null",
       "$uid": {
         ".write": "auth != null && auth.uid === $uid",
         "name": {
@@ -117,7 +190,8 @@
         },
         "$other": {
           ".validate": false
-        }
+        },
+        ".validate": "newData.hasChildren(['name', 'best', 'wins', 'plays', 'at']) && newData.child('wins').val() <= newData.child('plays').val()"
       }
     },
     "$other": {
