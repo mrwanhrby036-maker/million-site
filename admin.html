@@ -2870,7 +2870,7 @@ function field(label, id, value, max) {
     '" required></label>'
   );
 }
-$("view").onclick = $("modal").onclick = async (e) => {
+$("view").onclick = async (e) => {
   const b = e.target.closest("[data-action]");
   if (!b || !allowed) return;
   const id = b.dataset.id,
@@ -2899,10 +2899,7 @@ $("view").onclick = $("modal").onclick = async (e) => {
               (p.ready ? "نعم" : "لا") +
               "</td></tr>",
           ),
-        ) +
-        '<div style="margin-top:20px;display:flex;justify-content:flex-end">' +
-        action("delete-room", id, "إغلاق ومسح الغرفة", true) +
-        '</div>',
+        ),
     );
     return;
   }
@@ -2977,10 +2974,7 @@ $("view").onclick = $("modal").onclick = async (e) => {
   b.disabled = true;
   try {
     const updates = {};
-    if (type === "delete-room") {
-      updates["rooms/" + id] = null;
-      $("modal").close();
-    }
+    if (type === "delete-room") updates["rooms/" + id] = null;
     if (type === "delete-question") {
       updates["questions/" + id] = null;
       updates["votes/" + id] = null;
