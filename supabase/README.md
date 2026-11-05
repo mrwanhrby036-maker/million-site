@@ -72,9 +72,11 @@
 التفعيل موجود في نهاية `schema.sql`:
 
 - الجداول المضافة للـ publication: `votes`, `questions`, `stats`, `leaderboard`,
-  `rooms`, `room_players`, `room_progress`.
+  `rooms`, `room_players`, `room_progress`, `profiles`, `user_activity`, `room_activity`.
 - `replica identity full` على كل الجداول دي عشان التحديث/الحذف يوصّل الصف كامل.
 - الموقع بيستخدم قناتين: `data:<uid>` للتحديثات العامة، و `room:<code>` للغرفة.
+- لوحة الإدارة بتشترك في تغييرات `profiles`, `user_activity`, `room_activity`,
+  `leaderboard`, `questions`, `votes` عشان تعرض النشاط لحظيًا.
 
 لو التحديث اللحظي مش شغال: راجع **Database → Replication** في لوحة Supabase إن
 الجداول دي مفعّلة، وتأكد إن `Realtime` مش في وضع `COMING_UP`.
@@ -107,7 +109,28 @@
 
 ---
 
-## ٦) إضافة مشرف
+## ٦) لوحة الإدارة
+
+`Maru$#_admin.html` شغالة على نفس المشروع (Auth + Postgres + Realtime) بالمفتاح
+العام `anon` بس. مفيش أي `service_role` في المتصفح، والحماية كلها في RLS:
+
+| العملية | مين يقدر يعملها |
+| --- | --- |
+| قراءة كل البروفايلات/الإحصائيات | المشرف (`is_admin()`) |
+| تعديل اسم أي لاعب | المشرف — والـ trigger بيزامن `leaderboard` |
+| تصفير/تعديل `stats` | المشرف — والـ trigger بيزامن `leaderboard` |
+| تعديل/حذف أي سؤال | المشرف + صاحب السؤال |
+| حذف الأصوات | المشرف |
+| حذف غرفة | المشرف (وبيتحذف معاها اللاعبين والتقدّم بـ cascade) |
+
+الدخول للوحة بيتم بحساب عادي من الموقع؛ لو المستخدم مش في جدول `admins`
+بتظهرله رسالة «غير مصرّح» وميقدرش يقرأ أي بيانات غير صفّه هو.
+
+عشان تضيف مشرف شوف القسم اللي بعده.
+
+---
+
+## ٧) إضافة مشرف
 
 ```sql
 insert into public.admins (user_id)
@@ -117,7 +140,7 @@ on conflict do nothing;
 
 ---
 
-## ٧) الصيانة
+## ٨) الصيانة
 
 ```sql
 -- تنضيف يدوي (أو جدولة بـ pg_cron كل ساعة)
@@ -132,14 +155,14 @@ select cron.schedule('cleanup-rooms', '0 * * * *', $$select public.cleanup_stale
 
 ---
 
-## ٨) تطبيق المخطط من جديد
+## ٩) تطبيق المخطط من جديد
 
 انسخ محتوى `schema.sql` والصقه في **SQL Editor** ثم Run. الملف idempotent،
 فينفع تشغله على قاعدة فيها الجداول بالفعل.
 
 ---
 
-## ٩) ملاحظات أمان
+## ١٠) ملاحظات أمان
 
 - المتصفح بيستخدم مفتاح `anon` العام فقط.
 - **متستخدمش** `service_role` / `sb_secret_...` في HTML أو JS.
