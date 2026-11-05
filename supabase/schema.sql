@@ -691,6 +691,9 @@ create policy admins_select on public.admins for select to authenticated
 -- ============================================================
 -- ١٧) Realtime — الجداول اللي الموقع بيسمع عليها
 -- ============================================================
+alter table public.profiles      replica identity full;
+alter table public.user_activity replica identity full;
+alter table public.room_activity replica identity full;
 alter table public.votes         replica identity full;
 alter table public.questions     replica identity full;
 alter table public.stats         replica identity full;
@@ -704,7 +707,8 @@ declare
   t text;
 begin
   foreach t in array array[
-    'votes', 'questions', 'stats', 'leaderboard', 'rooms', 'room_players', 'room_progress'
+    'votes', 'questions', 'stats', 'leaderboard', 'rooms', 'room_players', 'room_progress',
+    'profiles', 'user_activity', 'room_activity'
   ] loop
     begin
       execute format('alter publication supabase_realtime add table public.%I', t);
